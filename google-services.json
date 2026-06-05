@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "447425667347",
+    "project_id": "controle-financeiro-4394a",
+    "storage_bucket": "controle-financeiro-4394a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447425667347:android:413183372306062b497ae6",
+        "android_client_info": {
+          "package_name": "controle.financeiro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCX3ScdzMsj7DFvVdFLJtZ2aNPSz8CRnzY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
