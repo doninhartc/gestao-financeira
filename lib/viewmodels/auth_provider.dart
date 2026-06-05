@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart'; // Import necessário
 import '../models/user_model.dart';
 import '../services/database_service.dart';
 
@@ -12,39 +13,69 @@ class AuthNotifier extends Notifier<UserModel?> {
     return null;
   }
 
-  Future<bool> login(String email, String password) async {
+  // NOVO: Método para logar automaticamente se marcou "Lembrar de mim"
+  Future<void> tryAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('saved_email');
+    final password = prefs.getString('saved_password');
+    
+    if (email != null && password != null) {
+      await login(email, password, rememberMe: false);
+    }
+  }
+
+  // ATUALIZADO: Agora recebe o rememberMe
+  Future<bool> login(String email, String password, {bool rememberMe = false}) async {
+    bool isSuccess = false;
+    UserModel? loggedUser;
+
     if (kIsWeb) {
       await Future.delayed(const Duration(milliseconds: 500));
-      // Tenta encontrar o usuário na lista em memória
       try {
-        final user = _webUsersDb.firstWhere(
+        loggedUser = _webUsersDb.firstWhere(
           (u) => u.email == email && u.password == password
         );
-        state = user;
-        return true;
+        isSuccess = true;
       } catch (e) {
-        return false; // Usuário não encontrado ou senha errada
+        isSuccess = false;
+      }
+    } else {
+      // Código real do SQLite para o celular
+      loggedUser = await DatabaseService.instance.getUserByEmail(email);
+      if (loggedUser != null && loggedUser.password == password) {
+        isSuccess = true;
       }
     }
 
-    // Código real do SQLite para o celular
-    final user = await DatabaseService.instance.getUserByEmail(email);
-    if (user != null && user.password == password) {
-      state = user;
+    // Se o login deu certo, atualiza o estado e salva os dados se necessário
+    if (isSuccess && loggedUser != null) {
+      state = loggedUser;
+      
+      if (rememberMe) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_email', email);
+        await prefs.setString('saved_password', password);
+      }
       return true;
     }
+
     return false;
   }
 
   Future<bool> register(String name, String email, String password) async {
     if (kIsWeb) {
       await Future.delayed(const Duration(milliseconds: 500));
-      // Verifica se o e-mail já existe na memória
       if (_webUsersDb.any((u) => u.email == email)) return false; 
       
       final newUser = UserModel(id: _webUsersDb.length + 1, name: name, email: email, password: password);
       _webUsersDb.add(newUser);
       state = newUser;
+      
+      // Auto-login após registro (opcional)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_email', email);
+      await prefs.setString('saved_password', password);
+      
       return true;
     }
 
@@ -59,8 +90,12 @@ class AuthNotifier extends Notifier<UserModel?> {
     return true;
   }
 
-  void logout() {
+  // ATUALIZADO: Limpa a memória do aparelho ao sair
+  Future<void> logout() async {
     state = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_email');
+    await prefs.remove('saved_password');
   }
 }
 

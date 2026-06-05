@@ -17,15 +17,17 @@ class _LoginViewState extends ConsumerState<LoginView> {
   final _passwordController = TextEditingController();
   
   bool _isLoading = false;
-  bool _rememberMe = false;
+  bool _rememberMe = false; // A variável do seu checkbox
 
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
+      // ALTERAÇÃO AQUI: Passando o parâmetro rememberMe
       final success = await ref.read(authProvider.notifier).login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
+        rememberMe: _rememberMe, 
       );
 
       setState(() => _isLoading = false);

@@ -138,15 +138,21 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 child: newsAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (err, _) => const Padding(padding: EdgeInsets.all(24), child: Text("Erro ao carregar", style: TextStyle(color: Colors.red))),
-                  data: (news) => ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: news.length,
-                    itemBuilder: (context, index) => Container(
-                      width: 200, margin: const EdgeInsets.only(left: 24), padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: const Color(0xFF23283B), borderRadius: BorderRadius.circular(16)),
-                      child: Text(news[index]['title'], style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 4, overflow: TextOverflow.ellipsis),
-                    ),
-                  ),
+                  // --- CORREÇÃO 1: Proteção de dados nulos da API ---
+                  data: (news) {
+                    if (news == null || news.isEmpty) {
+                      return const Center(child: Text("Sem dicas no momento.", style: TextStyle(color: Colors.white54)));
+                    }
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: news.length,
+                      itemBuilder: (context, index) => Container(
+                        width: 200, margin: const EdgeInsets.only(left: 24), padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: const Color(0xFF23283B), borderRadius: BorderRadius.circular(16)),
+                        child: Text(news[index]['title'] ?? 'Sem título', style: const TextStyle(color: Colors.white, fontSize: 13), maxLines: 4, overflow: TextOverflow.ellipsis),
+                      ),
+                    );
+                  },
                 ),
               ),
 
@@ -155,8 +161,9 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 child: Text("Transações Recentes", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ),
 
+              // --- CORREÇÃO 2: SizedBox limitando o SkeletonLoader ---
               _isFetchingData
-                  ? const SkeletonLoader()
+                  ? const SizedBox(height: 300, child: SkeletonLoader())
                   : transactions.isEmpty
                       ? const Center(child: Text('Nenhuma transação.', style: TextStyle(color: Colors.white54)))
                       : ListView.builder(
@@ -174,6 +181,40 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                                   const SizedBox(width: 16),
                                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(tx.title, style: const TextStyle(color: Colors.white)), Text('${tx.date.day}/${tx.date.month}', style: const TextStyle(color: Colors.white54))])),
                                   Text('${tx.type == TransactionType.income ? '+' : '-'} R\$ ${tx.value.toStringAsFixed(2)}', style: TextStyle(color: tx.type == TransactionType.income ? Colors.greenAccent : Colors.white)),
+                                  
+                                  // Botão de opções (Editar/Excluir)
+                                  PopupMenuButton<String>(
+                                    icon: const Icon(Icons.more_vert, color: Colors.white54),
+                                    color: const Color(0xFF2C2C2C),
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showDialog(
+                                          context: context,
+                                          builder: (_) => Dialog(
+                                            backgroundColor: Colors.transparent,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 400),
+                                              child: TransactionForm(transactionToEdit: tx), 
+                                            ),
+                                          ),
+                                        );
+                                      } else if (value == 'delete') {
+                                        if (tx.id != null) {
+                                          ref.read(transactionProvider.notifier).deleteTransaction(tx.id!);
+                                        }
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(children: [Icon(Icons.edit, color: Colors.blueAccent, size: 20), SizedBox(width: 8), Text('Editar', style: TextStyle(color: Colors.white))]),
+                                      ),
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(children: [Icon(Icons.delete, color: Colors.redAccent, size: 20), SizedBox(width: 8), Text('Excluir', style: TextStyle(color: Colors.white))]),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             );

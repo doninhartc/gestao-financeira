@@ -4,7 +4,10 @@ import '../models/transaction_model.dart';
 import '../viewmodels/transaction_provider.dart';
 
 class TransactionForm extends ConsumerStatefulWidget {
-  const TransactionForm({super.key});
+  // ADICIONADO: Variável opcional para receber a transação que será editada
+  final TransactionModel? transactionToEdit;
+  
+  const TransactionForm({super.key, this.transactionToEdit});
 
   @override
   ConsumerState<TransactionForm> createState() => _TransactionFormState();
@@ -14,40 +17,63 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _valueController = TextEditingController();
-  TransactionType _selectedType = TransactionType.expense; // Começa como despesa por padrão
+  TransactionType _selectedType = TransactionType.expense;
+
+  // ADICIONADO: Preenche os campos automaticamente se for uma edição
+  @override
+  void initState() {
+    super.initState();
+    if (widget.transactionToEdit != null) {
+      _titleController.text = widget.transactionToEdit!.title;
+      _valueController.text = widget.transactionToEdit!.value.toStringAsFixed(2);
+      _selectedType = widget.transactionToEdit!.type;
+    }
+  }
 
   void _submitForm() {
     if (_formKey.currentState!.validate()) {
       final title = _titleController.text;
       final value = double.tryParse(_valueController.text.replaceAll(',', '.')) ?? 0.0;
 
-      // O SEGREDO ESTÁ AQUI: Agora criamos o objeto completo antes de enviar
-      final newTransaction = TransactionModel(
-        title: title,
-        value: value,
-        date: DateTime.now(),
-        type: _selectedType,
-      );
+      // ADICIONADO: Verifica se estamos editando ou criando uma nova
+      if (widget.transactionToEdit != null) {
+        // Atualiza mantendo o ID e a Data originais
+        final updatedTransaction = TransactionModel(
+          id: widget.transactionToEdit!.id,
+          title: title,
+          value: value,
+          date: widget.transactionToEdit!.date,
+          type: _selectedType,
+        );
+        ref.read(transactionProvider.notifier).updateTransaction(updatedTransaction);
+      } else {
+        // Cria uma nova
+        final newTransaction = TransactionModel(
+          title: title,
+          value: value,
+          date: DateTime.now(),
+          type: _selectedType,
+        );
+        ref.read(transactionProvider.notifier).addTransaction(newTransaction);
+      }
 
-      // Enviamos o objeto empacotado para o Provider atualizado sem erros!
-      ref.read(transactionProvider.notifier).addTransaction(newTransaction);
-
-      // Fecha o modal
       Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Pega o espaço do teclado para o formulário subir junto com ele
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    
+    // Altera os textos dependendo se é criação ou edição
+    final isEditing = widget.transactionToEdit != null;
 
     return Container(
       padding: EdgeInsets.only(
         top: 24, left: 24, right: 24, bottom: bottomInset + 24,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E1E1E), // Cor de fundo combinando com o Dark Mode
+        color: Color(0xFF1E1E1E),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Form(
@@ -56,14 +82,13 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Nova Transação',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            Text(
+              isEditing ? 'Editar Transação' : 'Nova Transação',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             
-            // --- CAMPO: TÍTULO ---
             TextFormField(
               controller: _titleController,
               style: const TextStyle(color: Colors.white),
@@ -79,7 +104,6 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
             ),
             const SizedBox(height: 16),
             
-            // --- CAMPO: VALOR ---
             TextFormField(
               controller: _valueController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -100,7 +124,6 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
             ),
             const SizedBox(height: 24),
 
-            // --- SELETOR ESTILIZADO: RECEITA OU DESPESA ---
             Row(
               children: [
                 Expanded(
@@ -154,7 +177,6 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
             ),
             const SizedBox(height: 32),
             
-            // --- BOTÃO DE SALVAR ---
             ElevatedButton(
               onPressed: _submitForm,
               style: ElevatedButton.styleFrom(
@@ -162,7 +184,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('ADICIONAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              child: Text(isEditing ? 'SALVAR ALTERAÇÕES' : 'ADICIONAR', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ],
         ),

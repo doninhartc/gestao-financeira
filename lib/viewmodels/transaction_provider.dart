@@ -44,6 +44,24 @@ class TransactionNotifier extends Notifier<List<TransactionModel>> {
     await loadTransactions(); 
   }
 
+  // --- NOVA FUNÇÃO: Atualizar Transação (Editar) ---
+  Future<void> updateTransaction(TransactionModel updatedTransaction) async {
+    if (kIsWeb) {
+      // Procura a transação pelo ID e substitui os dados
+      final index = _webTransactionsDb.indexWhere((tx) => tx.id == updatedTransaction.id);
+      if (index != -1) {
+        _webTransactionsDb[index] = updatedTransaction;
+        state = List.from(_webTransactionsDb);
+      }
+      return;
+    }
+
+    // Código real para o celular (SQLite)
+    // Atenção: Certifique-se de que o seu DatabaseService tenha o método updateTransaction criado
+    await DatabaseService.instance.updateTransaction(updatedTransaction);
+    await loadTransactions();
+  }
+
   Future<void> deleteTransaction(int id) async {
     if (kIsWeb) {
       _webTransactionsDb.removeWhere((tx) => tx.id == id);

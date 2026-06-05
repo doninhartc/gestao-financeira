@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart'; // 1. Import necessário
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'views/login_view.dart';
 import 'firebase_options.dart';
+import 'viewmodels/auth_provider.dart'; // Import adicionado para o authProvider
 
 void main() async {
   // 3. Garante que o Flutter esteja inicializado antes de tocar no Firebase
@@ -16,8 +17,20 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
+
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Logo após inicializar o app ou no initState da sua primeira tela:
+    ref.read(authProvider.notifier).tryAutoLogin();
+  }
 
   @override
   Widget build(BuildContext context) {
