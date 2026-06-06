@@ -17,13 +17,29 @@ class _LoginViewState extends ConsumerState<LoginView> {
   final _passwordController = TextEditingController();
   
   bool _isLoading = false;
-  bool _rememberMe = false; // A variável do seu checkbox
+  bool _rememberMe = false; 
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoLogin();
+  }
+
+  // NOVO: Verifica se há dados salvos para login automático
+  Future<void> _checkAutoLogin() async {
+    bool success = await ref.read(authProvider.notifier).tryAutoLogin();
+    if (success && mounted) {
+      Navigator.pushReplacement(
+        context, 
+        MaterialPageRoute(builder: (_) => const DashboardView()),
+      );
+    }
+  }
 
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
-      // ALTERAÇÃO AQUI: Passando o parâmetro rememberMe
       final success = await ref.read(authProvider.notifier).login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
@@ -60,11 +76,9 @@ class _LoginViewState extends ConsumerState<LoginView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      // O Center garante que todo o bloco fique no meio da tela (vertical e horizontal)
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          // O ConstrainedBox limita a largura máxima do cartão de login
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Stack(
@@ -73,7 +87,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
               children: [
                 // --- CARTÃO PRINCIPAL ---
                 Container(
-                  margin: const EdgeInsets.only(top: 50), // Espaço para o ícone
+                  margin: const EdgeInsets.only(top: 50), 
                   padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
@@ -141,8 +155,28 @@ class _LoginViewState extends ConsumerState<LoginView> {
                                 const Text('Remember me', style: TextStyle(color: Colors.white70, fontSize: 12)),
                               ],
                             ),
+                            // NOVO: Funcionalidade do Forgot Password
                             TextButton(
-                              onPressed: () {},
+                              onPressed: () async {
+                                final email = _emailController.text.trim();
+                                if (email.isEmpty || !email.contains('@')) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Digite seu e-mail no campo acima primeiro para recuperar a senha.'), backgroundColor: Colors.orange),
+                                  );
+                                  return;
+                                }
+                                
+                                bool sent = await ref.read(authProvider.notifier).resetPassword(email);
+                                
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(sent ? 'E-mail de recuperação enviado! Verifique sua caixa de entrada.' : 'Erro. Verifique se o e-mail está correto e cadastrado.'),
+                                      backgroundColor: sent ? Colors.green : Colors.red,
+                                    ),
+                                  );
+                                }
+                              },
                               style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
                               child: const Text('Forgot Password?', style: TextStyle(color: Colors.white70, fontSize: 12)),
                             ),
