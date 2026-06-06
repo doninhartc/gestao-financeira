@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:shared_preferences/shared_preferences.dart'; // Import necessário
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import do Firebase Auth
 import '../models/user_model.dart';
 import '../services/database_service.dart';
 
@@ -13,7 +14,7 @@ class AuthNotifier extends Notifier<UserModel?> {
     return null;
   }
 
-  // NOVO: Método para logar automaticamente se marcou "Lembrar de mim"
+  // Método para logar automaticamente se marcou "Lembrar de mim"
   Future<void> tryAutoLogin() async {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('saved_email');
@@ -24,31 +25,28 @@ class AuthNotifier extends Notifier<UserModel?> {
     }
   }
 
-  // ATUALIZADO: Agora recebe o rememberMe
+  // Atualizado com Firebase
   Future<bool> login(String email, String password, {bool rememberMe = false}) async {
-    bool isSuccess = false;
-    UserModel? loggedUser;
+    try {
+      // 1. Tenta o login no Firebase primeiro
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-    if (kIsWeb) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      try {
-        loggedUser = _webUsersDb.firstWhere(
-          (u) => u.email == email && u.password == password
-        );
-        isSuccess = true;
-      } catch (e) {
-        isSuccess = false;
-      }
-    } else {
-      // Código real do SQLite para o celular
-      loggedUser = await DatabaseService.instance.getUserByEmail(email);
-      if (loggedUser != null && loggedUser.password == password) {
-        isSuccess = true;
-      }
-    }
+      UserModel? loggedUser;
 
-    // Se o login deu certo, atualiza o estado e salva os dados se necessário
-    if (isSuccess && loggedUser != null) {
+      // 2. Busca ou sincroniza com o banco local
+      if (kIsWeb) {
+        loggedUser = UserModel(id: 1, name: userCredential.user?.displayName ?? 'Usuário', email: email, password: password);
+      } else {
+        loggedUser = await DatabaseService.instance.getUserByEmail(email);
+        if (loggedUser == null) {
+          loggedUser = UserModel(name: userCredential.user?.displayName ?? 'Usuário', email: email, password: password);
+          await DatabaseService.instance.registerUser(loggedUser);
+        }
+      }
+
       state = loggedUser;
       
       if (rememberMe) {
@@ -57,41 +55,61 @@ class AuthNotifier extends Notifier<UserModel?> {
         await prefs.setString('saved_password', password);
       }
       return true;
+    } catch (e) {
+      return false; // Retorna falso se o Firebase der erro
     }
-
-    return false;
   }
 
+  // Atualizado com Firebase e Correção do ID
   Future<bool> register(String name, String email, String password) async {
-    if (kIsWeb) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (_webUsersDb.any((u) => u.email == email)) return false; 
+    try {
+      // 1. Registra no Firebase
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       
-      final newUser = UserModel(id: _webUsersDb.length + 1, name: name, email: email, password: password);
-      _webUsersDb.add(newUser);
-      state = newUser;
+      // Atualiza o nome de exibição no Firebase
+      await userCredential.user?.updateDisplayName(name);
+
+      UserModel finalUser;
+
+      // 2. Registra no banco local
+      if (kIsWeb) {
+        // Na Web, já criamos o modelo passando o ID direto para evitar erro de variável final
+        finalUser = UserModel(
+          id: _webUsersDb.length + 1, 
+          name: name, 
+          email: email, 
+          password: password
+        );
+        _webUsersDb.add(finalUser);
+      } else {
+        // No celular, deixamos o SQLite gerar o ID automático
+        finalUser = UserModel(
+          name: name, 
+          email: email, 
+          password: password
+        );
+        await DatabaseService.instance.registerUser(finalUser);
+      }
+
+      state = finalUser;
       
-      // Auto-login após registro (opcional)
+      // Auto-login após registro
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('saved_email', email);
       await prefs.setString('saved_password', password);
       
       return true;
+    } catch (e) {
+      return false; // Retorna falso se o Firebase der erro
     }
-
-    // Código real do SQLite para o celular
-    final existingUser = await DatabaseService.instance.getUserByEmail(email);
-    if (existingUser != null) return false;
-
-    final newUser = UserModel(name: name, email: email, password: password);
-    await DatabaseService.instance.registerUser(newUser);
-    
-    state = newUser;
-    return true;
   }
 
-  // ATUALIZADO: Limpa a memória do aparelho ao sair
+  // Atualizado com Firebase
   Future<void> logout() async {
+    await FirebaseAuth.instance.signOut(); // Desloga do Firebase
     state = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('saved_email');
